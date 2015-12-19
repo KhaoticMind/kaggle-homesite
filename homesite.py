@@ -9,7 +9,9 @@ sys.path.append('C:\\Users\\ur57\\Documents\\Python Scripts\\helper\\')
 
 from helper import modelSearch, getResults, persistData, applyPerHost
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import LinearSVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import LinearSVC, SVC
+from sklearn.preprocessing import normalize
 import pandas as pd
 from IPython.parallel import Client
 from sklearn.preprocessing import LabelEncoder
@@ -37,28 +39,43 @@ X = train.values
 
 classifiers = []
 
-rf_clf = RandomForestClassifier()
+rf_clf = RandomForestClassifier(n_estimators=100)
 params_rf = {'criterion': ['gini', 'entropy'],
              'oob_score': [True, False],
              'max_features':['sqrt', 'log2']}
 classifiers.append(('rf', rf_clf, params_rf))
 
-svc_clf = LinearSVC()
-params_lsvc = {'C': np.logspace(-3, 2, num=10),
-               'tol': np.logspace(-6, -2, num=10) }
-classifiers.append(('lsvc', svc_clf, params_lsvc))
+lsvc_clf = LinearSVC()
+params_lsvc = {'C': np.logspace(-3, 2, num=5),
+               'tol': np.logspace(-6, -2, num=5) }               
+classifiers.append(('lsvc', lsvc_clf, params_lsvc))
 
+knn_clf = KNeighborsClassifier()
+params_knn = { 'n_neighbors' : np.linspace(5, 50, 5),
+                              'p': np.linspace(1,5, 5),
+                              'algorithm' : ['ball_tree', 'kd_tree', 'brute']}
+classifiers.append(('knn', knn_clf, params_knn))
+
+svm_clf = SVC()
+params_svm = {'C': np.logspace(-3, 2, num=5),
+               'gamma': np.logspace(-6, -2, num=5) ,
+             'tol': np.logspace(-6, -2, num=5),
+            'shrinking ': [True,False]
+                }
+#classifiers.append(('svm', svm_clf, params_svm))
 
 client = Client()
 lbview = client.load_balanced_view()
 
-dados = [('dado', X)]
+Xnorm = normalize(X)
+dados = [('dado', X), ('dado_norm', Xnorm)]
 
 for label, X in dados:    
     applyPerHost(client, persistData, X, label)
 
-#tasks = modelSearch(lbview, dados, y_train, classifiers)
+tasks = modelSearch(lbview, dados, y_train, classifiers)
 
-#results = getResults(tasks)
+results = getResults(tasks)
 
-#results.groupby(['label_clf', 'params']).train_score.mean()
+res = results.groupby(['label_clf', 'label_dados', 'params'], as_index=False).mean()
+res = results.groupby(['label_clf', 'label_dados'], as_index=False).max()
